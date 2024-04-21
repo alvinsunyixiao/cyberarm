@@ -1,0 +1,79 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="cyberarm">
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://cyberarm/models/meshes/Base.dae"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="arm1_link">
+    <visual>
+      <origin xyz="-0.026683 0 0.07674" rpy="0 1.5708 0"/>
+      <geometry>
+        <mesh filename="package://cyberarm/models/meshes/Joint1.dae"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="arm2_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -1.5708 3.14159"/>
+      <geometry>
+        <mesh filename="package://cyberarm/models/meshes/JointArm.dae"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="arm3_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://cyberarm/models/meshes/JointArm.dae"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="end_effector_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="3.14159 -1.5708 0"/>
+      <geometry>
+        <mesh filename="package://cyberarm/models/meshes/EndEffector.dae"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="base_to_arm1_joint" type="revolute">
+    <origin xyz="0 0 0.03821" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="arm1_link"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="87" lower="-3.14" upper="3.14" velocity="100"/>
+  </joint>
+
+  <joint name="arm1_to_arm2_joint" type="revolute">
+    <origin xyz="0.015 0 0.07674" rpy="0 0 0"/>
+    <parent link="arm1_link"/>
+    <child link="arm2_link"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="87" lower="-3.14" upper="3.14" velocity="100"/>
+  </joint>
+
+  <joint name="arm2_to_arm3_joint" type="revolute">
+    <origin xyz="-0.04 0 0.129772" rpy="0 0 0"/>
+    <parent link="arm2_link"/>
+    <child link="arm3_link"/>
+    <axis xyz="-1 0 0"/>
+    <limit effort="87" lower="-3.14" upper="3.14" velocity="100"/>
+  </joint>
+
+  <joint name="arm3_to_end_effector_joint" type="revolute">
+    <origin xyz="0.04 0 0.129772" rpy="0 0 0"/>
+    <parent link="arm3_link"/>
+    <child link="end_effector_link"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="87" lower="-3.14" upper="3.14" velocity="100"/>
+  </joint>
+</robot>
