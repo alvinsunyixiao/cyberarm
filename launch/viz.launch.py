@@ -22,7 +22,7 @@ def generate_launch_description():
         PathJoinSubstitution([urdf_launch_package, 'launch', 'description.launch.py']),
         launch_arguments={
             'urdf_package': 'cyberarm',
-            'urdf_package_path': 'models/cyberarm/model.urdf'}.items()
+            'urdf_package_path': 'models/model.urdf'}.items()
     ))
 
     ld.add_action(Node(
@@ -31,4 +31,5 @@ def generate_launch_description():
         output='screen',
         arguments=['-d', LaunchConfiguration('rviz_config')],
     ))
+
     return ld
