@@ -11,9 +11,40 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
+add_library(cybergear_lib src/cybergear.cc)
+target_include_directories(cybergear_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+ament_export_targets(cybergear_libTarget HAS_LIBRARY_TARGET)
+
+add_executable(test_single_cybergear test/single_motor.cc)
+target_link_libraries(test_single_cybergear PUBLIC cybergear_lib)
+
+# install CPP libraries
+install(
+  TARGETS cybergear_lib
+  EXPORT cybergear_libTarget
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+
+# install headers
+install(
+    DIRECTORY include/
+    DESTINATION include
+)
+
+# install shared directories
 install(DIRECTORY models launch
         DESTINATION share/${PROJECT_NAME})
 
+# install CPP nodes
+install(TARGETS test_single_cybergear
+        DESTINATION lib/${PROJECT_NAME})
+
+# install Python nodes
 install(PROGRAMS
     scripts/control.py
     DESTINATION lib/${PROJECT_NAME})
