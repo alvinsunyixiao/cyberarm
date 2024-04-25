@@ -2,9 +2,11 @@
 #include <sys/ioctl.h>
 
 #include <linux/can/raw.h>
+#include <poll.h>
 
 #include <unistd.h>
 #include <cstring>
+#include <functional>
 #include <iostream>
 
 #include "cyberarm/cybergear.hpp"
@@ -19,8 +21,14 @@ static uint16_t float_to_uint16(float x, float x_min, float x_max){
   return static_cast<uint16_t>(((x - offset) * ((float)(0xffff)) / span));
 }
 
+static float uint16_to_float(uint16_t x, float x_min, float x_max) {
+  float span = static_cast<float>(0xffff);
+  float offset = x_max - x_min;
+  return offset * static_cast<float>(x) / span + x_min;
+}
 
-CyberGear::CyberGear(int can_id, const std::string& can_if, control_mode_t mode) : can_id_(can_id) {
+
+CyberGear::CyberGear(uint8_t can_id, const std::string& can_if, control_mode_t mode) : can_id_(can_id) {
   // socket initialization
   sock_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
   strcpy(can_ifr_.ifr_name, can_if.c_str());
@@ -33,34 +41,48 @@ CyberGear::CyberGear(int can_id, const std::string& can_if, control_mode_t mode)
     std::cerr << "CAN socket bind failure" << std::endl;
   }
 
+  // set CAN rx filter
+  struct can_filter filter;
+  filter.can_id = can_id_ << 8;
+  filter.can_mask = 0xff << 8;
+  if (setsockopt(sock_, SOL_CAN_RAW, CAN_RAW_FILTER, &filter, sizeof(filter)) < 0) {
+    std::cerr << "CAN filter init failure" << std::endl;
+  }
+
   // initialize CAN frame
   can_tx_frame_.can_dlc = 8;
+
+  // initialize rx loop
+  rx_loop_ = std::thread(std::bind(&CyberGear::RxLoop, this));
 
   SetRunMode(mode);
   Start();
 }
 
 CyberGear::~CyberGear() {
+  rx_should_exit_.store(true);
+  rx_loop_.join();
+
   close(sock_);
 }
 
 void CyberGear::Start() {
-  Transmit(MotorEnable);
+  Transmit(MOTOR_ENABLE);
 }
 
 void CyberGear::Stop(bool clear_err) {
   memset(can_tx_frame_.data, 0, sizeof(can_tx_frame_.data));
   can_tx_frame_.data[0] = clear_err;
-  Transmit(MotorStop);
+  Transmit(MOTOR_STOP);
 }
 
 void CyberGear::SetZeroPosition() {
   can_tx_frame_.data[0] = 1;
-  Transmit(SetPosZero);
+  Transmit(SET_ZERO_POSITION);
 }
 
 void CyberGear::SetRunMode(control_mode_t mode) {
-  SetMotorParameter<uint8_t>(PARAM_RUN_MODE, mode);
+  SetMotorParameter<uint8_t>(RUN_MODE, mode);
 }
 
 void CyberGear::SendMotionCommand(float torque, float position, float speed, float kp, float kd) {
@@ -79,7 +101,12 @@ void CyberGear::SendMotionCommand(float torque, float position, float speed, flo
   can_tx_frame_.data[6] = kd_uint >> 8;
   can_tx_frame_.data[7] = kd_uint;
 
-  Transmit(MotionControl, torque_uint);
+  Transmit(MOTION_CONTROL, torque_uint);
+}
+
+CyberGear::State CyberGear::GetState() const {
+  std::lock_guard<std::mutex> lock(state_mtx_);
+  return state_;
 }
 
 void CyberGear::Transmit(communication_type_t comm_type, uint16_t header_data) {
@@ -87,6 +114,41 @@ void CyberGear::Transmit(communication_type_t comm_type, uint16_t header_data) {
   if (write(sock_, &can_tx_frame_, sizeof(can_tx_frame_)) != sizeof(can_tx_frame_)) {
     std::cerr << "CAN transmit failure" << std::endl;
   }
+}
+
+void CyberGear::RxLoop() {
+  struct pollfd pfd;
+  pfd.fd = sock_;
+  pfd.events = POLLIN;
+
+  while (!rx_should_exit_.load()) {
+    if (poll(&pfd, 1, 1000) > 0 && pfd.revents & POLLIN) {
+      if (read(sock_, &can_rx_frame_, sizeof(can_rx_frame_)) < 0) {
+        std::cerr << "CAN read error (shouldn't get here)" << std::endl;
+        continue;
+      }
+
+      if (((can_rx_frame_.can_id >> 8) & 0xff) != can_id_) {
+        std::cerr << "CAN ID does not match (should not get here)" << std::endl;
+        continue;
+      }
+
+      {
+        std::lock_guard<std::mutex> lock(state_mtx_);
+        state_.position = uint16_to_float(
+          can_rx_frame_.data[0] << 8 | can_rx_frame_.data[1], P_MIN, P_MAX);
+        state_.velocity = uint16_to_float(
+          can_rx_frame_.data[2] << 8 | can_rx_frame_.data[3], V_MIN, V_MAX);
+        state_.torque = uint16_to_float(
+          can_rx_frame_.data[4] << 8 | can_rx_frame_.data[5], T_MIN, T_MAX);
+        state_.temperature = (
+          can_rx_frame_.data[6] << 8 | can_rx_frame_.data[7]) * Temp_Gain;
+        error_code_ = (can_rx_frame_.can_id >> 16) & 0x1f;
+      }
+    }
+  }
+
+  std::cout << "RX Loop successfully stopped for CAN ID: " << (int)can_id_ << std::endl;
 }
 
 }  // namespace xiaomi

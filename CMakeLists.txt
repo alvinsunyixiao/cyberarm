@@ -6,19 +6,28 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # find dependencies
+find_package(Threads REQUIRED)
+
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 add_library(cybergear_lib src/cybergear.cc)
 target_include_directories(cybergear_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
+target_link_libraries(cybergear_lib PRIVATE Threads::Threads)
 ament_export_targets(cybergear_libTarget HAS_LIBRARY_TARGET)
 
 add_executable(test_single_cybergear test/single_motor.cc)
 target_link_libraries(test_single_cybergear PUBLIC cybergear_lib)
+
+add_executable(test_multi_cybergear test/multi_motor.cc)
+target_link_libraries(test_multi_cybergear PUBLIC cybergear_lib)
+
+add_executable(test_arm_viz test/arm_viz.cc)
+target_link_libraries(test_arm_viz cybergear_lib)
+ament_target_dependencies(test_arm_viz rclcpp sensor_msgs)
 
 # install CPP libraries
 install(
@@ -41,7 +50,7 @@ install(DIRECTORY models launch
         DESTINATION share/${PROJECT_NAME})
 
 # install CPP nodes
-install(TARGETS test_single_cybergear
+install(TARGETS test_single_cybergear test_multi_cybergear test_arm_viz
         DESTINATION lib/${PROJECT_NAME})
 
 # install Python nodes
