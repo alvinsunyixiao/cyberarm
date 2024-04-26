@@ -56,11 +56,6 @@ install(DIRECTORY models launch
 install(TARGETS arm_viz_node
         DESTINATION lib/${PROJECT_NAME})
 
-# install Python nodes
-install(PROGRAMS
-    scripts/control.py
-    DESTINATION lib/${PROJECT_NAME})
-
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
