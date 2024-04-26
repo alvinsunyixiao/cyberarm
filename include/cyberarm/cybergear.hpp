@@ -8,40 +8,13 @@
 #include <string>
 #include <thread>
 
-#define P_MIN -12.5f
-#define P_MAX 12.5f
-#define V_MIN -30.0f
-#define V_MAX 30.0f
-#define KP_MIN 0.0f
-#define KP_MAX 500.0f
-#define KD_MIN 0.0f
-#define KD_MAX 5.0f
-#define T_MIN -12.0f
-#define T_MAX 12.0f
-// #define MAX_P 720
-// #define MIN_P -720
-//主机CANID设置
-#define Master_CAN_ID 0x00                      //主机ID
-//控制命令宏定义
-//参数读取宏定义
-
-#define Gain_Angle 720/32767.0
-#define Bias_Angle 0x8000
-#define Gain_Speed 30/32767.0
-#define Bias_Speed 0x8000
-#define Gain_Torque 12/32767.0
-#define Bias_Torque 0x8000
-#define Temp_Gain   0.1
-
-#define Motor_Error 0x00
-#define Motor_OK 0x01
 
 namespace xiaomi {
 
 enum control_mode_t {
   MOTION_MODE = 0,
   POSITION_MODE = 1,
-  SPEED_MODE = 2,
+  VELOCITY_MODE = 2,
   CURRENT_MODE = 3,
 };
 
@@ -79,6 +52,19 @@ enum param_type_t {
   SPD_KI = 0x7020,
 };
 
+// float data range
+constexpr float P_MIN = -12.5f;
+constexpr float P_MAX = 12.5f;
+constexpr float V_MIN = -30.0f;
+constexpr float V_MAX = 30.0f;
+constexpr float KP_MIN = 0.0f;
+constexpr float KP_MAX = 500.0f;
+constexpr float KD_MIN = 0.0f;
+constexpr float KD_MAX = 5.0f;
+constexpr float T_MIN = -12.0f;
+constexpr float T_MAX = 12.0f;
+constexpr float TEMPERATURE_GAIN = 0.1;
+
 class CyberGear {
  public:
   struct State {
@@ -88,11 +74,11 @@ class CyberGear {
     float temperature;
   };
 
-  CyberGear(uint8_t can_id, const std::string& can_if = "can0", control_mode_t mode = MOTION_MODE);
+  CyberGear(uint8_t can_id, control_mode_t mode = MOTION_MODE, const std::string& can_if = "can0");
   ~CyberGear();
 
   template <typename T>
-  void SetMotorParameter(uint16_t index, T value) {
+  void SetMotorParameter(param_type_t index, T value) {
     static_assert (sizeof(T) <= 4, "value type size cannot exceed 4 bytes");
     can_tx_frame_.data[0] = index & 0xff;
     can_tx_frame_.data[1] = index >> 8;
@@ -104,9 +90,35 @@ class CyberGear {
 
   void Start();
   void Stop(bool clear_err = false);
+
   void SetZeroPosition();
   void SetRunMode(control_mode_t mode);
-  void SendMotionCommand(float torque, float position, float speed, float kp, float kd);
+
+  /**
+   * @brief configure max velocity and current for position mode control
+   *
+   * @param max_velocity
+   * @param max_current
+   *
+   * @note must be called after Start()
+   */
+  void ConfigurePositionMode(float max_velocity = 2.0, float max_current = 23.0);
+
+  void SendMotionCommand(float torque, float position, float velocity, float kp, float kd);
+
+  /**
+   * @brief send position command for position mode control
+   *
+   * @param position
+   * @note call ConfigurePositionMode before sending any position command
+   */
+  void SendPositionCommand(float position);
+
+  /**
+   * @brief get the current state of the motor reported by communication type 2
+   *
+   * @return
+   */
   State GetState() const;
 
  private:
@@ -126,6 +138,8 @@ class CyberGear {
   mutable std::mutex state_mtx_;
   State state_;
   uint8_t error_code_;
+  bool enabled_ = false;
+  control_mode_t ctrl_mode_;
 
   void Transmit(communication_type_t comm_type, uint16_t header_data = 0x00);
   void RxLoop();

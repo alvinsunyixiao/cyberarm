@@ -28,7 +28,7 @@ static float uint16_to_float(uint16_t x, float x_min, float x_max) {
 }
 
 
-CyberGear::CyberGear(uint8_t can_id, const std::string& can_if, control_mode_t mode) : can_id_(can_id) {
+CyberGear::CyberGear(uint8_t can_id, control_mode_t mode, const std::string& can_if) : can_id_(can_id), ctrl_mode_(mode) {
   // socket initialization
   sock_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
   strcpy(can_ifr_.ifr_name, can_if.c_str());
@@ -68,12 +68,14 @@ CyberGear::~CyberGear() {
 
 void CyberGear::Start() {
   Transmit(MOTOR_ENABLE);
+  enabled_ = true;
 }
 
 void CyberGear::Stop(bool clear_err) {
   memset(can_tx_frame_.data, 0, sizeof(can_tx_frame_.data));
   can_tx_frame_.data[0] = clear_err;
   Transmit(MOTOR_STOP);
+  enabled_ = false;
 }
 
 void CyberGear::SetZeroPosition() {
@@ -82,26 +84,40 @@ void CyberGear::SetZeroPosition() {
 }
 
 void CyberGear::SetRunMode(control_mode_t mode) {
-  SetMotorParameter<uint8_t>(RUN_MODE, mode);
+  if (!enabled_) {
+    SetMotorParameter<uint8_t>(RUN_MODE, mode);
+    ctrl_mode_ = mode;
+  } else {
+    std::cerr << "Cannot change mode while running" << std::endl;
+  }
 }
 
-void CyberGear::SendMotionCommand(float torque, float position, float speed, float kp, float kd) {
+void CyberGear::ConfigurePositionMode(float max_velocity, float max_current) {
+  SetMotorParameter(LIMIT_CUR, max_current);
+  SetMotorParameter(LIMIT_SPD, max_velocity);
+}
+
+void CyberGear::SendMotionCommand(float torque, float position, float velocity, float kp, float kd) {
   uint16_t torque_uint = float_to_uint16(torque, T_MIN, T_MAX);
   uint16_t position_uint = float_to_uint16(position, P_MIN, P_MAX);
-  uint16_t speed_uint = float_to_uint16(speed, V_MIN, V_MAX);
+  uint16_t velocity_uint = float_to_uint16(velocity, V_MIN, V_MAX);
   uint16_t kp_uint = float_to_uint16(kp, KP_MIN, KP_MAX);
   uint16_t kd_uint = float_to_uint16(kd, KD_MIN, KD_MAX);
 
   can_tx_frame_.data[0] = position_uint >> 8;
   can_tx_frame_.data[1] = position_uint;
-  can_tx_frame_.data[2] = speed_uint >> 8;
-  can_tx_frame_.data[3] = speed_uint;
+  can_tx_frame_.data[2] = velocity_uint >> 8;
+  can_tx_frame_.data[3] = velocity_uint;
   can_tx_frame_.data[4] = kp_uint >> 8;
   can_tx_frame_.data[5] = kp_uint;
   can_tx_frame_.data[6] = kd_uint >> 8;
   can_tx_frame_.data[7] = kd_uint;
 
   Transmit(MOTION_CONTROL, torque_uint);
+}
+
+void CyberGear::SendPositionCommand(float position) {
+  SetMotorParameter(LOC_REF, position);
 }
 
 CyberGear::State CyberGear::GetState() const {
@@ -142,7 +158,7 @@ void CyberGear::RxLoop() {
         state_.torque = uint16_to_float(
           can_rx_frame_.data[4] << 8 | can_rx_frame_.data[5], T_MIN, T_MAX);
         state_.temperature = (
-          can_rx_frame_.data[6] << 8 | can_rx_frame_.data[7]) * Temp_Gain;
+          can_rx_frame_.data[6] << 8 | can_rx_frame_.data[7]) * TEMPERATURE_GAIN;
         error_code_ = (can_rx_frame_.can_id >> 16) & 0x1f;
       }
     }
