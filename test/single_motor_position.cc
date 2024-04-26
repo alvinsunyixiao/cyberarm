@@ -11,8 +11,9 @@ int main() {
   motor.ConfigurePositionMode();
 
   motor.SendPositionCommand(1.0);
-  std::this_thread::sleep_for(5s);
+  std::this_thread::sleep_for(3s);
   motor.SendPositionCommand(0.0);
+  std::this_thread::sleep_for(3s);
 
   return 0;
 }

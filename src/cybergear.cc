@@ -60,6 +60,8 @@ CyberGear::CyberGear(uint8_t can_id, control_mode_t mode, const std::string& can
 }
 
 CyberGear::~CyberGear() {
+  Stop();
+
   rx_should_exit_.store(true);
   rx_loop_.join();
 
