@@ -99,10 +99,17 @@ class CyberGear {
    *
    * @param max_velocity
    * @param max_current
+   * @param position_kp
+   * @param velocity_kp
+   * @param velocity_ki
    *
    * @note must be called after Start()
    */
-  void ConfigurePositionMode(float max_velocity = 2.0, float max_current = 23.0);
+  void ConfigurePositionMode(float max_velocity = 2.0,
+                             float max_current = 23.0,
+                             float position_kp = 30.0,
+                             float velocity_kp = 1.0,
+                             float velocity_ki = 0.002);
 
   void SendMotionCommand(float torque, float position, float velocity, float kp, float kd);
 

@@ -25,12 +25,12 @@ target_link_libraries(test_single_cybergear PUBLIC cybergear_lib)
 add_executable(test_multi_cybergear test/multi_motor.cc)
 target_link_libraries(test_multi_cybergear PUBLIC cybergear_lib)
 
-add_executable(test_single_position test/single_motor_position.cc)
-target_link_libraries(test_single_position PUBLIC cybergear_lib)
+add_executable(test_position_mode test/position_mode.cc)
+target_link_libraries(test_position_mode PUBLIC cybergear_lib)
 
-add_executable(test_arm_viz test/arm_viz.cc)
-target_link_libraries(test_arm_viz cybergear_lib)
-ament_target_dependencies(test_arm_viz rclcpp sensor_msgs)
+add_executable(arm_viz_node src/arm_viz_node.cc)
+target_link_libraries(arm_viz_node cybergear_lib)
+ament_target_dependencies(arm_viz_node rclcpp sensor_msgs)
 
 # install CPP libraries
 install(
@@ -53,7 +53,7 @@ install(DIRECTORY models launch
         DESTINATION share/${PROJECT_NAME})
 
 # install CPP nodes
-install(TARGETS test_arm_viz
+install(TARGETS arm_viz_node
         DESTINATION lib/${PROJECT_NAME})
 
 # install Python nodes

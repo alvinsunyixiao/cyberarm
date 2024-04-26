@@ -94,9 +94,16 @@ void CyberGear::SetRunMode(control_mode_t mode) {
   }
 }
 
-void CyberGear::ConfigurePositionMode(float max_velocity, float max_current) {
+void CyberGear::ConfigurePositionMode(float max_velocity,
+                                      float max_current,
+                                      float position_kp,
+                                      float velocity_kp,
+                                      float velocity_ki) {
   SetMotorParameter(LIMIT_CUR, max_current);
   SetMotorParameter(LIMIT_SPD, max_velocity);
+  SetMotorParameter(LOC_KP, position_kp);
+  SetMotorParameter(SPD_KP, velocity_kp);
+  SetMotorParameter(SPD_KI, velocity_ki);
 }
 
 void CyberGear::SendMotionCommand(float torque, float position, float velocity, float kp, float kd) {
