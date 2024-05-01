@@ -3,11 +3,10 @@
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 
-#include <Eigen/Dense>
-
 #include <tf2_eigen/tf2_eigen.hpp>
 
 #include "cyberarm/cybergear.hpp"
+#include "cyberarm/sym/forward3d.h"
 
 #define ARM0_CAN_ID 127
 #define ARM1_CAN_ID 126
@@ -23,9 +22,9 @@ using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
 using geometry_msgs::msg::Vector3;
 
-class ArmVizNode : public rclcpp::Node {
+class CyberarmNode : public rclcpp::Node {
  public:
-  ArmVizNode()
+  CyberarmNode()
       : rclcpp::Node("cyberarm_node"),
         m_arm0_(ARM0_CAN_ID),
         m_arm1_(ARM1_CAN_ID),
@@ -37,15 +36,17 @@ class ArmVizNode : public rclcpp::Node {
     m_tip_.SetZeroPosition();
 
     js_pub_ = create_publisher<JointState>("joint_states", 10);
-    target_sub_ = create_subscription<Vector3>("ctrl/target_xyz", 10,
-      [this](Vector3::SharedPtr msg) { TargetXYZCallback(msg); });
-    viz_timer_ = create_wall_timer(10ms, std::bind(&ArmVizNode::VizLoop, this));
+    ee_pub_ = create_publisher<Vector3>("state/end_effector", 10);
+    target_sub_ = create_subscription<Vector3>("ctrl/target3d", 10,
+      [this](Vector3::SharedPtr msg) { Target3DCallback(msg); });
+    state_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::StateLoop, this));
   }
 
  private:
   rclcpp::Publisher<JointState>::SharedPtr js_pub_;
+  rclcpp::Publisher<Vector3>::SharedPtr ee_pub_;
   rclcpp::Subscription<Vector3>::SharedPtr target_sub_;
-  rclcpp::TimerBase::SharedPtr viz_timer_;
+  rclcpp::TimerBase::SharedPtr state_timer_;
 
   xiaomi::CyberGear m_arm0_;
   xiaomi::CyberGear m_arm1_;
@@ -57,23 +58,39 @@ class ArmVizNode : public rclcpp::Node {
   xiaomi::CyberGear::State s_arm2_;
   xiaomi::CyberGear::State s_tip_;
 
-  void TargetXYZCallback(Vector3::SharedPtr msg) {
-    Eigen::Vector3d target_xyz;
-    tf2::fromMsg(*msg, target_xyz);
+  void Target3DCallback(Vector3::SharedPtr msg) {
+    Eigen::Vector3d target3d;
+    tf2::fromMsg(*msg, target3d);
 
-    if ((target_xyz - L0 * Eigen::Vector3d::UnitZ()).norm() > (L1 + L2 + L3 - 0.05)) {
-      RCLCPP_ERROR(get_logger(), "Target out of reachable workspace");
-      return;
+    if ((target3d - L0 * Eigen::Vector3d::UnitZ()).norm() > (L1 + L2 + L3 - 0.05)) {
+      RCLCPP_WARN(get_logger(), "Target out of reachable workspace");
     }
 
+    // solve with LM Chan
+    Eigen::Vector4d q(s_arm0_.position, s_arm1_.position, s_arm2_.position, s_tip_.position);
+
+    Eigen::Vector3d f;
+    double e;
+    Eigen::Matrix<double, 3, 4> J;
+    Eigen::Matrix4d A;
+    constexpr double lambda = 1e-4;
+
+    for (int i = 0; i < 10; ++i) {
+      symik::Forward3D(q, lambda, target3d, &f, &e, &J, &A);
+      q -= A.inverse() * J.transpose() * (f - target3d);
+    }
+
+    RCLCPP_INFO(get_logger(), "LM solved with error: %lf, final configuration: [%lf, %lf, %lf, %lf]",
+        e, q[0], q[1], q[2], q[3]);
   }
 
-  void VizLoop() {
+  void StateLoop() {
     s_arm0_ = m_arm0_.GetState();
     s_arm1_ = m_arm1_.GetState();
     s_arm2_ = m_arm2_.GetState();
     s_tip_ = m_tip_.GetState();
 
+    // publisher joint state
     JointState msg{};
     msg.header.stamp = this->get_clock()->now();
 
@@ -90,12 +107,20 @@ class ArmVizNode : public rclcpp::Node {
     msg.name[3] = "arm3_to_end_effector_joint";
 
     js_pub_->publish(msg);
+
+    // publish end effector location
+    constexpr double lambda = 1e-4;
+    const Eigen::Vector3d target3d = Eigen::Vector3d::Zero();
+    const Eigen::Vector4d q(s_arm0_.position, s_arm1_.position, s_arm2_.position, s_tip_.position);
+    Eigen::Vector3d f;
+    symik::Forward3D<double>(q, lambda, target3d, &f, nullptr, nullptr, nullptr);
+    ee_pub_->publish(tf2::toMsg2(f));
   }
 };
 
 int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<ArmVizNode>());
+  rclcpp::spin(std::make_shared<CyberarmNode>());
   rclcpp::shutdown();
   return 0;
 }
