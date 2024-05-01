@@ -17,7 +17,7 @@ def generate_launch_description():
                 'urdf_package_path': 'models/model.urdf'}.items()
         ),
         Node(
-            executable="arm_viz_node",
+            executable="cyberarm_node",
             package="cyberarm",
         ),
     ])

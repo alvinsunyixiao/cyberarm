@@ -11,6 +11,10 @@ find_package(Threads REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(tf2_eigen REQUIRED)
 
 add_library(cybergear_lib src/cybergear.cc)
 target_include_directories(cybergear_lib PUBLIC
@@ -28,9 +32,9 @@ target_link_libraries(test_multi_cybergear PUBLIC cybergear_lib)
 add_executable(test_position_mode test/position_mode.cc)
 target_link_libraries(test_position_mode PUBLIC cybergear_lib)
 
-add_executable(arm_viz_node src/arm_viz_node.cc)
-target_link_libraries(arm_viz_node cybergear_lib)
-ament_target_dependencies(arm_viz_node rclcpp sensor_msgs)
+add_executable(cyberarm_node src/cyberarm_node.cc)
+target_link_libraries(cyberarm_node cybergear_lib)
+ament_target_dependencies(cyberarm_node rclcpp sensor_msgs geometry_msgs Eigen3 tf2_eigen)
 
 # install CPP libraries
 install(
@@ -53,7 +57,7 @@ install(DIRECTORY models launch
         DESTINATION share/${PROJECT_NAME})
 
 # install CPP nodes
-install(TARGETS arm_viz_node
+install(TARGETS cyberarm_node
         DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

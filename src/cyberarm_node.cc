@@ -1,32 +1,51 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/node.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
+
+#include <Eigen/Dense>
+
+#include <tf2_eigen/tf2_eigen.hpp>
 
 #include "cyberarm/cybergear.hpp"
 
+#define ARM0_CAN_ID 127
+#define ARM1_CAN_ID 126
+#define ARM2_CAN_ID 125
+#define TIP_CAN_ID  124
+
+#define L0 0.11729
+#define L1 0.129772
+#define L2 0.129772
+#define L3 0.141307
+
 using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
+using geometry_msgs::msg::Vector3;
 
 class ArmVizNode : public rclcpp::Node {
  public:
   ArmVizNode()
-      : rclcpp::Node("arm_viz_node"),
-        m_arm0_(127),
-        m_arm1_(126),
-        m_arm2_(125),
-        m_tip_(124) {
+      : rclcpp::Node("cyberarm_node"),
+        m_arm0_(ARM0_CAN_ID),
+        m_arm1_(ARM1_CAN_ID),
+        m_arm2_(ARM2_CAN_ID),
+        m_tip_(TIP_CAN_ID) {
     m_arm0_.SetZeroPosition();
     m_arm1_.SetZeroPosition();
     m_arm2_.SetZeroPosition();
     m_tip_.SetZeroPosition();
 
     js_pub_ = create_publisher<JointState>("joint_states", 10);
-    loop_timer_ = create_wall_timer(5ms, std::bind(&ArmVizNode::Loop, this));
+    target_sub_ = create_subscription<Vector3>("ctrl/target_xyz", 10,
+      [this](Vector3::SharedPtr msg) { TargetXYZCallback(msg); });
+    viz_timer_ = create_wall_timer(10ms, std::bind(&ArmVizNode::VizLoop, this));
   }
 
  private:
   rclcpp::Publisher<JointState>::SharedPtr js_pub_;
-  rclcpp::TimerBase::SharedPtr loop_timer_;
+  rclcpp::Subscription<Vector3>::SharedPtr target_sub_;
+  rclcpp::TimerBase::SharedPtr viz_timer_;
 
   xiaomi::CyberGear m_arm0_;
   xiaomi::CyberGear m_arm1_;
@@ -38,12 +57,18 @@ class ArmVizNode : public rclcpp::Node {
   xiaomi::CyberGear::State s_arm2_;
   xiaomi::CyberGear::State s_tip_;
 
-  void Loop() {
-    m_arm0_.SendMotionCommand(0.0, 0.0, 0.0, 1.0, 0.0);
-    m_arm1_.SendMotionCommand(0.0, 0.0, 0.0, 1.0, 0.0);
-    m_arm2_.SendMotionCommand(0.0, 0.0, 0.0, 1.0, 0.0);
-    m_tip_.SendMotionCommand(0.0, 0.0, 0.0, 1.0, 0.0);
+  void TargetXYZCallback(Vector3::SharedPtr msg) {
+    Eigen::Vector3d target_xyz;
+    tf2::fromMsg(*msg, target_xyz);
 
+    if ((target_xyz - L0 * Eigen::Vector3d::UnitZ()).norm() > (L1 + L2 + L3 - 0.05)) {
+      RCLCPP_ERROR(get_logger(), "Target out of reachable workspace");
+      return;
+    }
+
+  }
+
+  void VizLoop() {
     s_arm0_ = m_arm0_.GetState();
     s_arm1_ = m_arm1_.GetState();
     s_arm2_ = m_arm2_.GetState();
