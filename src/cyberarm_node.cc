@@ -92,7 +92,7 @@ class CyberarmNode : public rclcpp::Node {
     s_arm2_ = m_arm2_.GetState();
     s_tip_ = m_tip_.GetState();
 
-    // publisher joint state
+    // publish joint state
     JointState msg{};
     msg.header.stamp = this->get_clock()->now();
 
