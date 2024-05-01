@@ -40,6 +40,7 @@ class CyberarmNode : public rclcpp::Node {
     target_sub_ = create_subscription<Vector3>("ctrl/target3d", 10,
       [this](Vector3::SharedPtr msg) { Target3DCallback(msg); });
     state_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::StateLoop, this));
+    ctrl_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::CtrlLoop, this));
   }
 
  private:
@@ -47,6 +48,7 @@ class CyberarmNode : public rclcpp::Node {
   rclcpp::Publisher<Vector3>::SharedPtr ee_pub_;
   rclcpp::Subscription<Vector3>::SharedPtr target_sub_;
   rclcpp::TimerBase::SharedPtr state_timer_;
+  rclcpp::TimerBase::SharedPtr ctrl_timer_;
 
   xiaomi::CyberGear m_arm0_;
   xiaomi::CyberGear m_arm1_;
@@ -62,7 +64,7 @@ class CyberarmNode : public rclcpp::Node {
     Eigen::Vector3d target3d;
     tf2::fromMsg(*msg, target3d);
 
-    if ((target3d - L0 * Eigen::Vector3d::UnitZ()).norm() > (L1 + L2 + L3 - 0.05)) {
+    if ((target3d - L0 * Eigen::Vector3d::UnitZ()).norm() > (L1 + L2 + L3 - 0.01)) {
       RCLCPP_WARN(get_logger(), "Target out of reachable workspace");
     }
 
@@ -115,6 +117,13 @@ class CyberarmNode : public rclcpp::Node {
     Eigen::Vector3d f;
     symik::Forward3D<double>(q, lambda, target3d, &f, nullptr, nullptr, nullptr);
     ee_pub_->publish(tf2::toMsg2(f));
+  }
+
+  void CtrlLoop() {
+    m_arm0_.SendMotionCommand(0., 0., 0., 0., 0.);
+    m_arm1_.SendMotionCommand(0., 0., 0., 0., 0.);
+    m_arm2_.SendMotionCommand(0., 0., 0., 0., 0.);
+    m_tip_.SendMotionCommand(0., 0., 0., 0., 0.);
   }
 };
 
