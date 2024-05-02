@@ -10,11 +10,12 @@ find_package(Threads REQUIRED)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(tf2_eigen REQUIRED)
+
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 add_library(cybergear_lib src/cybergear.cc)
 target_include_directories(cybergear_lib PUBLIC
