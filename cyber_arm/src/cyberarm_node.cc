@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <string>
 
 #include <rclcpp/rclcpp.hpp>
@@ -21,6 +22,7 @@
 #define L3 0.141307
 
 #define NUM_MOTORS 4
+#define NUM_LM_ITERS  20
 
 using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
@@ -90,9 +92,13 @@ class CyberarmNode : public rclcpp::Node {
     Eigen::Matrix4d A;
     constexpr double lambda = 1e-4;
 
-    for (int i = 0; i < 20; ++i) {
+    for (int i = 0; i < NUM_LM_ITERS; ++i) {
       symik::Forward3D(q, lambda, target3d, &f, &e, &J, &A);
       q -= A.inverse() * J.transpose() * (f - target3d);
+      q[0] = std::clamp(q[0], -M_PI / 2., M_PI / 2.);
+      q[1] = std::clamp(q[1], -M_PI / 4., M_PI / 4.);
+      q[2] = std::clamp(q[2], -M_PI / 2., M_PI / 2.);
+      q[3] = std::clamp(q[3], -M_PI / 2., M_PI / 2.);
     }
 
     RCLCPP_INFO(get_logger(), "LM solved with error: %lf, final configuration: [%lf, %lf, %lf, %lf]",
