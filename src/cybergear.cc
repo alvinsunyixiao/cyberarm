@@ -2,6 +2,7 @@
 #include <sys/ioctl.h>
 
 #include <linux/can/raw.h>
+#include <fcntl.h>
 #include <poll.h>
 
 #include <unistd.h>
@@ -39,6 +40,15 @@ CyberGear::CyberGear(uint8_t can_id, control_mode_t mode, const std::string& can
   can_addr_.can_ifindex = can_ifr_.ifr_ifindex;
   if (bind(sock_, (struct sockaddr*)&can_addr_, sizeof(can_addr_)) == -1) {
     std::cerr << "CAN socket bind failure" << std::endl;
+  }
+
+  // set socket to non blocking IO
+  int flags = fcntl(sock_, F_GETFL, 0);
+  if (flags < 0) {
+    std::cerr << "Error getting socket flags" << std::endl;
+  }
+  if (fcntl(sock_, F_SETFL, flags | O_NONBLOCK) < 0) {
+    std::cerr << "Error setting nonblocking flag on socket" << std::endl;
   }
 
   // set CAN rx filter
