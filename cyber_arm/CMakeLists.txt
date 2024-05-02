@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(cyberarm)
+project(cyber_arm)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -14,6 +14,7 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(tf2_eigen REQUIRED)
 
+find_package(cyber_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
@@ -22,7 +23,9 @@ target_include_directories(cybergear_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 target_link_libraries(cybergear_lib PRIVATE Threads::Threads)
+ament_target_dependencies(cybergear_lib PUBLIC cyber_msgs)
 ament_export_targets(cybergear_libTarget HAS_LIBRARY_TARGET)
+ament_export_dependencies(cyber_msgs)
 
 add_executable(test_single_cybergear test/single_motor.cc)
 target_link_libraries(test_single_cybergear PUBLIC cybergear_lib)
