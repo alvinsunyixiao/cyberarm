@@ -1,3 +1,5 @@
+#include <string>
+
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/node.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
@@ -11,37 +13,41 @@
 #define ARM0_CAN_ID 127
 #define ARM1_CAN_ID 126
 #define ARM2_CAN_ID 125
-#define TIP_CAN_ID  124
+#define ARM3_CAN_ID 124
 
 #define L0 0.11729
 #define L1 0.129772
 #define L2 0.129772
 #define L3 0.141307
 
+#define NUM_MOTORS 4
+
 using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
 using geometry_msgs::msg::PointStamped;
+using cyber_msgs::msg::CybergearState;
 
 class CyberarmNode : public rclcpp::Node {
  public:
   CyberarmNode()
-      : rclcpp::Node("cyberarm_node"),
-        m_arm0_(ARM0_CAN_ID, xiaomi::POSITION_MODE),
-        m_arm1_(ARM1_CAN_ID, xiaomi::POSITION_MODE),
-        m_arm2_(ARM2_CAN_ID, xiaomi::POSITION_MODE),
-        m_tip_(TIP_CAN_ID, xiaomi::POSITION_MODE) {
+      : rclcpp::Node("cyberarm_node") {
 
-    m_arm0_.SetZeroPosition();
-    m_arm1_.SetZeroPosition();
-    m_arm2_.SetZeroPosition();
-    m_tip_.SetZeroPosition();
+    m_arm_[0] = std::make_unique<xiaomi::CyberGear>(ARM0_CAN_ID, xiaomi::POSITION_MODE);
+    m_arm_[1] = std::make_unique<xiaomi::CyberGear>(ARM1_CAN_ID, xiaomi::POSITION_MODE);
+    m_arm_[2] = std::make_unique<xiaomi::CyberGear>(ARM2_CAN_ID, xiaomi::POSITION_MODE);
+    m_arm_[3] = std::make_unique<xiaomi::CyberGear>(ARM3_CAN_ID, xiaomi::POSITION_MODE);
+
+    for (int i = 0; i < NUM_MOTORS; ++i) {
+      m_arm_[i]->SetZeroPosition();
+      cb_state_pubs_[i] = create_publisher<CybergearState>("state/arm" + std::to_string(i), 10);
+    }
 
     rclcpp::sleep_for(100ms);
 
-    m_arm0_.ConfigurePositionMode();
-    m_arm1_.ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.006);
-    m_arm2_.ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.004);
-    m_tip_.ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.004);
+    m_arm_[0]->ConfigurePositionMode();
+    m_arm_[1]->ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.006);
+    m_arm_[2]->ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.004);
+    m_arm_[3]->ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.004);
 
     js_pub_ = create_publisher<JointState>("joint_states", 10);
     ee_pub_ = create_publisher<PointStamped>("state/end_effector", 10);
@@ -57,16 +63,10 @@ class CyberarmNode : public rclcpp::Node {
   rclcpp::Subscription<PointStamped>::SharedPtr target_sub_;
   rclcpp::TimerBase::SharedPtr state_timer_;
   rclcpp::TimerBase::SharedPtr ctrl_timer_;
+  rclcpp::Publisher<CybergearState>::SharedPtr cb_state_pubs_[NUM_MOTORS];
 
-  xiaomi::CyberGear m_arm0_;
-  xiaomi::CyberGear m_arm1_;
-  xiaomi::CyberGear m_arm2_;
-  xiaomi::CyberGear m_tip_;
-
-  xiaomi::CyberGear::State s_arm0_;
-  xiaomi::CyberGear::State s_arm1_;
-  xiaomi::CyberGear::State s_arm2_;
-  xiaomi::CyberGear::State s_tip_;
+  std::unique_ptr<xiaomi::CyberGear> m_arm_[NUM_MOTORS];
+  CybergearState s_arm_[NUM_MOTORS];
 
   Eigen::Vector4d target_q_ = Eigen::Vector4d::Zero();
 
@@ -79,7 +79,10 @@ class CyberarmNode : public rclcpp::Node {
     }
 
     // solve with LM Chan
-    Eigen::Vector4d q(s_arm0_.position, s_arm1_.position, s_arm2_.position, s_tip_.position);
+    Eigen::Vector4d q(s_arm_[0].position,
+                      s_arm_[1].position,
+                      s_arm_[2].position,
+                      s_arm_[3].position);
 
     Eigen::Vector3d f;
     double e;
@@ -99,10 +102,12 @@ class CyberarmNode : public rclcpp::Node {
   }
 
   void StateLoop() {
-    s_arm0_ = m_arm0_.GetState();
-    s_arm1_ = m_arm1_.GetState();
-    s_arm2_ = m_arm2_.GetState();
-    s_tip_ = m_tip_.GetState();
+    // obtain latest states
+    for (int i = 0; i < NUM_MOTORS; ++i) {
+      s_arm_[i] = m_arm_[i]->GetState();
+    }
+
+    // get timestamp
     const auto now = this->get_clock()->now();
 
     // publish joint state
@@ -110,10 +115,10 @@ class CyberarmNode : public rclcpp::Node {
     msg.header.stamp = now;
 
     msg.position.resize(4);
-    msg.position[0] = s_arm0_.position;
-    msg.position[1] = s_arm1_.position;
-    msg.position[2] = s_arm2_.position;
-    msg.position[3] = s_tip_.position;
+    msg.position[0] = s_arm_[0].position;
+    msg.position[1] = s_arm_[1].position;
+    msg.position[2] = s_arm_[2].position;
+    msg.position[3] = s_arm_[3].position;
 
     msg.name.resize(4);
     msg.name[0] = "base_to_arm1_joint";
@@ -124,7 +129,10 @@ class CyberarmNode : public rclcpp::Node {
     // publish end effector location
     constexpr double lambda = 1e-4;
     const Eigen::Vector3d target3d = Eigen::Vector3d::Zero();
-    const Eigen::Vector4d q(s_arm0_.position, s_arm1_.position, s_arm2_.position, s_tip_.position);
+    const Eigen::Vector4d q(s_arm_[0].position,
+                            s_arm_[1].position,
+                            s_arm_[2].position,
+                            s_arm_[3].position);
     Eigen::Vector3d f;
     symik::Forward3D<double>(q, lambda, target3d, &f, nullptr, nullptr, nullptr);
 
@@ -135,13 +143,15 @@ class CyberarmNode : public rclcpp::Node {
 
     js_pub_->publish(msg);
     ee_pub_->publish(ee_msg);
+    for (int i = 0; i < NUM_MOTORS; ++i) {
+      cb_state_pubs_[i]->publish(s_arm_[i]);
+    }
   }
 
   void CtrlLoop() {
-    m_arm0_.SendPositionCommand(target_q_[0]);
-    m_arm1_.SendPositionCommand(target_q_[1]);
-    m_arm2_.SendPositionCommand(target_q_[2]);
-    m_tip_.SendPositionCommand(target_q_[3]);
+    for (int i = 0; i < NUM_MOTORS; ++i) {
+      m_arm_[i]->SendPositionCommand(target_q_[i]);
+    }
   }
 };
 

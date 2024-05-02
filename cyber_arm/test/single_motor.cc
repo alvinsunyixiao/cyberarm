@@ -6,7 +6,7 @@ using namespace std::chrono_literals;
 
 int main() {
   xiaomi::CyberGear motor(124);
-  xiaomi::CyberGear::State motor_state;
+  cyber_msgs::msg::CybergearState motor_state;
   motor.SetZeroPosition();
 
   for (int i = 0; i < 1000; ++i) {
