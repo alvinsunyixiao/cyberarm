@@ -4,7 +4,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://cyberarm/models/meshes/Base.dae"/>
+        <mesh filename="package://cyber_arm/models/meshes/Base.dae"/>
       </geometry>
     </visual>
   </link>
@@ -13,7 +13,7 @@
     <visual>
       <origin xyz="-0.026683 0 0.07674" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://cyberarm/models/meshes/Joint1.dae"/>
+        <mesh filename="package://cyber_arm/models/meshes/Joint1.dae"/>
       </geometry>
     </visual>
   </link>
@@ -22,7 +22,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 -1.5708 3.14159"/>
       <geometry>
-        <mesh filename="package://cyberarm/models/meshes/JointArm.dae"/>
+        <mesh filename="package://cyber_arm/models/meshes/JointArm.dae"/>
       </geometry>
     </visual>
   </link>
@@ -31,7 +31,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 -1.5708 0"/>
       <geometry>
-        <mesh filename="package://cyberarm/models/meshes/JointArm.dae"/>
+        <mesh filename="package://cyber_arm/models/meshes/JointArm.dae"/>
       </geometry>
     </visual>
   </link>
@@ -40,7 +40,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="3.14159 -1.5708 0"/>
       <geometry>
-        <mesh filename="package://cyberarm/models/meshes/EndEffector.dae"/>
+        <mesh filename="package://cyber_arm/models/meshes/EndEffector.dae"/>
       </geometry>
     </visual>
   </link>
