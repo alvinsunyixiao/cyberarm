@@ -14,6 +14,8 @@
 
 namespace xiaomi {
 
+using cyber_msgs::msg::CybergearState;
+
 static uint16_t float_to_uint16(float x, float x_min, float x_max){
   float span = x_max - x_min;
   float offset = x_min;
@@ -139,7 +141,7 @@ void CyberGear::SendPositionCommand(float position) {
   SetMotorParameter(LOC_REF, position);
 }
 
-CyberGear::State CyberGear::GetState() const {
+CybergearState CyberGear::GetState() const {
   std::lock_guard<std::mutex> lock(state_mtx_);
   return state_;
 }

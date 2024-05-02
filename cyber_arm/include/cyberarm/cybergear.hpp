@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 
+#include "cyber_msgs/msg/cybergear_state.hpp"
 
 namespace xiaomi {
 
@@ -67,13 +68,6 @@ constexpr float TEMPERATURE_GAIN = 0.1;
 
 class CyberGear {
  public:
-  struct State {
-    float position;
-    float velocity;
-    float torque;
-    float temperature;
-  };
-
   CyberGear(uint8_t can_id, control_mode_t mode = MOTION_MODE, const std::string& can_if = "can0");
   ~CyberGear();
 
@@ -126,7 +120,7 @@ class CyberGear {
    *
    * @return
    */
-  State GetState() const;
+  cyber_msgs::msg::CybergearState GetState() const;
 
  private:
   // CAN data structures
@@ -143,7 +137,7 @@ class CyberGear {
 
   // motor state
   mutable std::mutex state_mtx_;
-  State state_;
+  cyber_msgs::msg::CybergearState state_;
   uint8_t error_code_;
   bool enabled_ = false;
   control_mode_t ctrl_mode_;
