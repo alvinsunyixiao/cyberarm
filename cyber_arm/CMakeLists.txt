@@ -57,7 +57,7 @@ install(
 )
 
 # install shared directories
-install(DIRECTORY models launch
+install(DIRECTORY models launch rviz
         DESTINATION share/${PROJECT_NAME})
 
 # install CPP nodes

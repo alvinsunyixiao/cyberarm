@@ -11,9 +11,7 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     ld = LaunchDescription()
 
-    urdf_launch_package = FindPackageShare('urdf_launch')
-
-    default_rviz_config_path = PathJoinSubstitution([urdf_launch_package, 'config', 'urdf.rviz'])
+    default_rviz_config_path = PathJoinSubstitution([FindPackageShare("cyber_arm"), 'rviz', 'default.rviz'])
     ld.add_action(DeclareLaunchArgument(name='rviz_config', default_value=default_rviz_config_path,
                                         description='Absolute path to rviz config file'))
 
