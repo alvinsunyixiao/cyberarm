@@ -13,11 +13,11 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PathJoinSubstitution([urdf_launch_package, 'launch', 'description.launch.py']),
             launch_arguments={
-                'urdf_package': 'cyberarm',
+                'urdf_package': 'cyber_arm',
                 'urdf_package_path': 'models/model.urdf'}.items()
         ),
         Node(
             executable="cyberarm_node",
-            package="cyberarm",
+            package="cyber_arm",
         ),
     ])
