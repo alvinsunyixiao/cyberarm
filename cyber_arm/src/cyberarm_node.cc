@@ -118,7 +118,7 @@ class CyberarmNode : public rclcpp::Node {
       symik::Forward3D(q, lambda, target3d, L, &f, &e, &J, &A);
       q -= A.inverse() * J.transpose() * (f - target3d);
       q[0] = std::clamp(q[0], -M_PI / 2., M_PI / 2.);
-      q[1] = std::clamp(q[1], -M_PI / 4., M_PI / 4.);
+      q[1] = std::clamp(q[1], -M_PI / 2., M_PI / 2.);
       q[2] = std::clamp(q[2], -M_PI / 2., M_PI / 2.);
       q[3] = std::clamp(q[3], -M_PI / 2., M_PI / 2.);
     }

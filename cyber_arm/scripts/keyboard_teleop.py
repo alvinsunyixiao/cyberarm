@@ -3,8 +3,9 @@
 import sys
 import threading
 
-import geometry_msgs.msg
 import rclpy
+
+from cyber_msgs.msg import CyberarmTarget4D
 
 if sys.platform == 'win32':
     import msvcrt
@@ -41,12 +42,14 @@ CTRL-C to quit
 """
 
 moveBindings = {
-    'w': (1, 0, 0),
-    's': (-1, 0, 0),
-    'a': (0, 1, 0),
-    'd': (0, -1, 0),
-    'k': (0, 0, -1),
-    'i': (0, 0, 1),
+    'w': (1, 0, 0, 0),
+    's': (-1, 0, 0, 0),
+    'a': (0, 1, 0, 0),
+    'd': (0, -1, 0, 0),
+    'k': (0, 0, -1, 0),
+    'i': (0, 0, 1, 0),
+    'q': (0, 0, 0, -1),
+    'e': (0, 0, 0, 1),
 }
 
 
@@ -85,7 +88,7 @@ def main():
     # parameters
     frame_id = node.declare_parameter('frame_id', 'base_link').value
 
-    pub = node.create_publisher(geometry_msgs.msg.PointStamped, 'ctrl/target3d', 10)
+    pub = node.create_publisher(CyberarmTarget4D, 'ctrl/target4d', 10)
 
     spinner = threading.Thread(target=rclpy.spin, args=(node,))
     spinner.start()
@@ -93,22 +96,20 @@ def main():
     x = 0.0
     y = 0.0
     z = 0.5
+    t = 0.0
     vx = 0.0
     vy = 0.0
     vz = 0.0
+    vt = 0.0
 
-    msg = geometry_msgs.msg.PointStamped()
-    msg.header.stamp = node.get_clock().now().to_msg()
-    msg.header.frame_id = frame_id
+    msg = CyberarmTarget4D()
 
     try:
         print(msg)
         while True:
             key = getKey(settings)
             if key in moveBindings.keys():
-                vx = moveBindings[key][0]
-                vy = moveBindings[key][1]
-                vz = moveBindings[key][2]
+                vx, vy, vz, vt = moveBindings[key]
             else:
                 vx = 0.0
                 vy = 0.0
@@ -119,12 +120,12 @@ def main():
             x += vx * 0.005
             y += vy * 0.005
             z += vz * 0.005
-
-            msg.header.stamp = node.get_clock().now().to_msg()
+            t += vt * 0.005
 
             msg.point.x = x
             msg.point.y = y
             msg.point.z = z
+            msg.tilt = t
 
             pub.publish(msg)
 
