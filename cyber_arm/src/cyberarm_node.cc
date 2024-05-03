@@ -20,6 +20,7 @@
 #define L1 0.129772
 #define L2 0.129772
 #define L3 0.141307
+#define L {L0, L1, L2, L3}
 
 #define NUM_MOTORS 4
 #define NUM_LM_ITERS  20
@@ -93,7 +94,7 @@ class CyberarmNode : public rclcpp::Node {
     constexpr double lambda = 1e-4;
 
     for (int i = 0; i < NUM_LM_ITERS; ++i) {
-      symik::Forward3D(q, lambda, target3d, &f, &e, &J, &A);
+      symik::Forward3D(q, lambda, target3d, L, &f, &e, &J, &A);
       q -= A.inverse() * J.transpose() * (f - target3d);
       q[0] = std::clamp(q[0], -M_PI / 2., M_PI / 2.);
       q[1] = std::clamp(q[1], -M_PI / 4., M_PI / 4.);
@@ -140,7 +141,7 @@ class CyberarmNode : public rclcpp::Node {
                             s_arm_[2].position,
                             s_arm_[3].position);
     Eigen::Vector3d f;
-    symik::Forward3D<double>(q, lambda, target3d, &f, nullptr, nullptr, nullptr);
+    symik::Forward3D<double>(q, lambda, target3d, L, &f, nullptr, nullptr, nullptr);
 
     PointStamped ee_msg{};
     ee_msg.point = tf2::toMsg(f);
