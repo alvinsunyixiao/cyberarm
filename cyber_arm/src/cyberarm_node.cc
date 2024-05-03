@@ -4,12 +4,15 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/node.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 
 #include <tf2_eigen/tf2_eigen.hpp>
 
-#include "cyberarm/cybergear.hpp"
-#include "cyberarm/sym/forward3d.h"
+#include "cyber_arm/cybergear.hpp"
+#include "cyber_arm/sym/forward3d.h"
+#include "cyber_arm/sym/forward4d.h"
+#include "cyber_msgs/msg/cyberarm_target4_d.hpp"
 
 #define ARM0_CAN_ID 127
 #define ARM1_CAN_ID 126
@@ -27,8 +30,10 @@
 
 using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
+using geometry_msgs::msg::Point;
 using geometry_msgs::msg::PointStamped;
 using cyber_msgs::msg::CybergearState;
+using cyber_msgs::msg::CyberarmTarget4D;
 
 class CyberarmNode : public rclcpp::Node {
  public:
@@ -53,17 +58,22 @@ class CyberarmNode : public rclcpp::Node {
     m_arm_[3]->ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.004);
 
     js_pub_ = create_publisher<JointState>("joint_states", 10);
-    ee_pub_ = create_publisher<PointStamped>("state/end_effector", 10);
-    target_sub_ = create_subscription<PointStamped>("ctrl/target3d", 10,
-      [this](PointStamped::SharedPtr msg) { Target3DCallback(msg); });
+    viz_ee_pub_ = create_publisher<PointStamped>("viz/end_effector", 10);
+    viz_target_pub_ = create_publisher<PointStamped>("viz/target3d", 10);
+    target3d_sub_ = create_subscription<Point>("ctrl/target3d", 10,
+      [this](Point::SharedPtr msg) { Target3DCallback(msg); });
+    target4d_sub_ = create_subscription<CyberarmTarget4D>("ctrl/target4d", 10,
+      [this](CyberarmTarget4D::SharedPtr msg) { Target4DCallback(msg); });
     state_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::StateLoop, this));
     ctrl_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::CtrlLoop, this));
   }
 
  private:
   rclcpp::Publisher<JointState>::SharedPtr js_pub_;
-  rclcpp::Publisher<PointStamped>::SharedPtr ee_pub_;
-  rclcpp::Subscription<PointStamped>::SharedPtr target_sub_;
+  rclcpp::Publisher<PointStamped>::SharedPtr viz_ee_pub_;
+  rclcpp::Publisher<PointStamped>::SharedPtr viz_target_pub_;
+  rclcpp::Subscription<Point>::SharedPtr target3d_sub_;
+  rclcpp::Subscription<CyberarmTarget4D>::SharedPtr target4d_sub_;
   rclcpp::TimerBase::SharedPtr state_timer_;
   rclcpp::TimerBase::SharedPtr ctrl_timer_;
   rclcpp::Publisher<CybergearState>::SharedPtr cb_state_pubs_[NUM_MOTORS];
@@ -73,9 +83,20 @@ class CyberarmNode : public rclcpp::Node {
 
   Eigen::Vector4d target_q_ = Eigen::Vector4d::Zero();
 
-  void Target3DCallback(PointStamped::SharedPtr msg) {
+  void PublishPoint(rclcpp::Publisher<PointStamped>::SharedPtr pub,
+                    const Point& point,
+                    const std::string& frame_id = "base_link") {
+    PointStamped msg{};
+    msg.header.stamp = this->get_clock()->now();
+    msg.header.frame_id = frame_id;
+    msg.point = point;
+
+    pub->publish(msg);
+  }
+
+  void Target3DCallback(Point::SharedPtr msg) {
     Eigen::Vector3d target3d;
-    tf2::fromMsg(msg->point, target3d);
+    tf2::fromMsg(*msg, target3d);
 
     if ((target3d - L0 * Eigen::Vector3d::UnitZ()).norm() > (L1 + L2 + L3 - 0.01)) {
       RCLCPP_WARN(get_logger(), "Target out of reachable workspace");
@@ -106,6 +127,48 @@ class CyberarmNode : public rclcpp::Node {
         e, q[0], q[1], q[2], q[3]);
 
     target_q_ = q;
+
+    PublishPoint(viz_target_pub_, *msg);
+  }
+
+  void Target4DCallback(CyberarmTarget4D::SharedPtr msg) {
+    Eigen::Vector4d target4d;
+    target4d[0] = msg->point.x;
+    target4d[1] = msg->point.y;
+    target4d[2] = msg->point.z;
+    target4d[3] = msg->tilt;
+
+    if ((target4d.head<3>() - L0 * Eigen::Vector3d::UnitZ()).norm() > (L1 + L2 + L3 - 0.01)) {
+      RCLCPP_WARN(get_logger(), "Target out of reachable workspace");
+    }
+
+    // solve with LM Chan
+    Eigen::Vector4d q(s_arm_[0].position,
+                      s_arm_[1].position,
+                      s_arm_[2].position,
+                      s_arm_[3].position);
+
+    Eigen::Vector4d f;
+    double e;
+    Eigen::Matrix4d J;
+    Eigen::Matrix4d A;
+    constexpr double lambda = 1e-4;
+
+    for (int i = 0; i < NUM_LM_ITERS; ++i) {
+      symik::Forward4D(q, lambda, target4d, L, &f, &e, &J, &A);
+      q -= A.inverse() * J.transpose() * (f - target4d);
+      q[0] = std::clamp(q[0], -M_PI / 2., M_PI / 2.);
+      q[1] = std::clamp(q[1], -M_PI / 4., M_PI / 4.);
+      q[2] = std::clamp(q[2], -M_PI / 2., M_PI / 2.);
+      q[3] = std::clamp(q[3], -M_PI / 2., M_PI / 2.);
+    }
+
+    RCLCPP_INFO(get_logger(), "LM solved with error: %lf, final configuration: [%lf, %lf, %lf, %lf]",
+        e, q[0], q[1], q[2], q[3]);
+
+    target_q_ = q;
+
+    PublishPoint(viz_target_pub_, msg->point);
   }
 
   void StateLoop() {
@@ -114,12 +177,9 @@ class CyberarmNode : public rclcpp::Node {
       s_arm_[i] = m_arm_[i]->GetState();
     }
 
-    // get timestamp
-    const auto now = this->get_clock()->now();
-
     // publish joint state
     JointState msg{};
-    msg.header.stamp = now;
+    msg.header.stamp = this->get_clock()->now();
 
     msg.position.resize(4);
     msg.position[0] = s_arm_[0].position;
@@ -143,16 +203,11 @@ class CyberarmNode : public rclcpp::Node {
     Eigen::Vector3d f;
     symik::Forward3D<double>(q, lambda, target3d, L, &f, nullptr, nullptr, nullptr);
 
-    PointStamped ee_msg{};
-    ee_msg.point = tf2::toMsg(f);
-    ee_msg.header.stamp = now;
-    ee_msg.header.frame_id = "base_link";
-
-    js_pub_->publish(msg);
-    ee_pub_->publish(ee_msg);
     for (int i = 0; i < NUM_MOTORS; ++i) {
       cb_state_pubs_[i]->publish(s_arm_[i]);
     }
+    js_pub_->publish(msg);
+    PublishPoint(viz_ee_pub_, tf2::toMsg(f));
   }
 
   void CtrlLoop() {

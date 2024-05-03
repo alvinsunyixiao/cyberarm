@@ -10,7 +10,7 @@
 #include <functional>
 #include <iostream>
 
-#include "cyberarm/cybergear.hpp"
+#include "cyber_arm/cybergear.hpp"
 
 namespace xiaomi {
 
