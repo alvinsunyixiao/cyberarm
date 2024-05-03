@@ -81,7 +81,7 @@
   </joint>
 
   <joint name="ee_to_camera" type="fixed">
-    <origin xyz="-0.056 0 0.10095" rpy="0 0 0"/>
+    <origin xyz="-0.056 0 0.10095" rpy="0 -1.5708 1.5708"/>
     <parent link="end_effector_link"/>
     <child link="camera_link"/>
   </joint>
