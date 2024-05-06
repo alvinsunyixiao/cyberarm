@@ -12,6 +12,7 @@
 #include "cyber_arm/cybergear.hpp"
 #include "cyber_arm/sym/forward3d.h"
 #include "cyber_arm/sym/forward4d.h"
+#include "cyber_msgs/msg/cyberarm_config.hpp"
 #include "cyber_msgs/msg/cyberarm_target4_d.hpp"
 
 #define ARM0_CAN_ID 127
@@ -28,11 +29,17 @@
 #define NUM_MOTORS 4
 #define NUM_LM_ITERS  20
 
+#define ARM0_LIMIT M_PI
+#define ARM1_LIMIT (M_PI / 2.)
+#define ARM2_LIMIT (M_PI / 2.)
+#define ARM3_LIMIT (M_PI / 2.)
+
 using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::PointStamped;
 using cyber_msgs::msg::CybergearState;
+using cyber_msgs::msg::CyberarmConfig;
 using cyber_msgs::msg::CyberarmTarget4D;
 
 class CyberarmNode : public rclcpp::Node {
@@ -64,6 +71,8 @@ class CyberarmNode : public rclcpp::Node {
       [this](Point::SharedPtr msg) { Target3DCallback(msg); });
     target4d_sub_ = create_subscription<CyberarmTarget4D>("ctrl/target4d", 10,
       [this](CyberarmTarget4D::SharedPtr msg) { Target4DCallback(msg); });
+    config_sub_ = create_subscription<CyberarmConfig>("ctrl/configuration", 10,
+      [this](CyberarmConfig::SharedPtr msg) { ConfigurationCallback(msg); });
     state_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::StateLoop, this));
     ctrl_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::CtrlLoop, this));
   }
@@ -74,6 +83,7 @@ class CyberarmNode : public rclcpp::Node {
   rclcpp::Publisher<PointStamped>::SharedPtr viz_target_pub_;
   rclcpp::Subscription<Point>::SharedPtr target3d_sub_;
   rclcpp::Subscription<CyberarmTarget4D>::SharedPtr target4d_sub_;
+  rclcpp::Subscription<CyberarmConfig>::SharedPtr config_sub_;
   rclcpp::TimerBase::SharedPtr state_timer_;
   rclcpp::TimerBase::SharedPtr ctrl_timer_;
   rclcpp::Publisher<CybergearState>::SharedPtr cb_state_pubs_[NUM_MOTORS];
@@ -117,10 +127,10 @@ class CyberarmNode : public rclcpp::Node {
     for (int i = 0; i < NUM_LM_ITERS; ++i) {
       symik::Forward3D(q, lambda, target3d, L, &f, &e, &J, &A);
       q -= A.inverse() * J.transpose() * (f - target3d);
-      q[0] = std::clamp(q[0], -M_PI / 2., M_PI / 2.);
-      q[1] = std::clamp(q[1], -M_PI / 2., M_PI / 2.);
-      q[2] = std::clamp(q[2], -M_PI / 2., M_PI / 2.);
-      q[3] = std::clamp(q[3], -M_PI / 2., M_PI / 2.);
+      q[0] = std::clamp(q[0], -ARM0_LIMIT, ARM0_LIMIT);
+      q[1] = std::clamp(q[1], -ARM1_LIMIT, ARM1_LIMIT);
+      q[2] = std::clamp(q[2], -ARM2_LIMIT, ARM2_LIMIT);
+      q[3] = std::clamp(q[3], -ARM3_LIMIT, ARM3_LIMIT);
     }
 
     RCLCPP_INFO(get_logger(), "LM solved with error: %lf, final configuration: [%lf, %lf, %lf, %lf]",
@@ -157,10 +167,10 @@ class CyberarmNode : public rclcpp::Node {
     for (int i = 0; i < NUM_LM_ITERS; ++i) {
       symik::Forward4D(q, lambda, target4d, L, &f, &e, &J, &A);
       q -= A.inverse() * J.transpose() * (f - target4d);
-      q[0] = std::clamp(q[0], -M_PI / 2., M_PI / 2.);
-      q[1] = std::clamp(q[1], -M_PI / 4., M_PI / 4.);
-      q[2] = std::clamp(q[2], -M_PI / 2., M_PI / 2.);
-      q[3] = std::clamp(q[3], -M_PI / 2., M_PI / 2.);
+      q[0] = std::clamp(q[0], -ARM0_LIMIT, ARM0_LIMIT);
+      q[1] = std::clamp(q[1], -ARM1_LIMIT, ARM1_LIMIT);
+      q[2] = std::clamp(q[2], -ARM2_LIMIT, ARM2_LIMIT);
+      q[3] = std::clamp(q[3], -ARM3_LIMIT, ARM3_LIMIT);
     }
 
     RCLCPP_INFO(get_logger(), "LM solved with error: %lf, final configuration: [%lf, %lf, %lf, %lf]",
@@ -169,6 +179,13 @@ class CyberarmNode : public rclcpp::Node {
     target_q_ = q;
 
     PublishPoint(viz_target_pub_, msg->point);
+  }
+
+  void ConfigurationCallback(CyberarmConfig::SharedPtr msg) {
+    target_q_[0] = std::clamp(msg->q[0], -ARM0_LIMIT, ARM0_LIMIT);
+    target_q_[1] = std::clamp(msg->q[1], -ARM1_LIMIT, ARM1_LIMIT);
+    target_q_[2] = std::clamp(msg->q[2], -ARM2_LIMIT, ARM2_LIMIT);
+    target_q_[3] = std::clamp(msg->q[3], -ARM3_LIMIT, ARM3_LIMIT);
   }
 
   void StateLoop() {
