@@ -11,11 +11,11 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PathJoinSubstitution([FindPackageShare("realsense2_camera"), "launch", "rs_launch.py"]),
             launch_arguments={
-                "enable_color": "true",
-                "enable_depth": "true",
                 "enable_rgbd": "true",
                 "enable_sync": "true",
                 "align_depth.enable": "true",
+                "enable_color": "true",
+                "enable_depth": "true",
                 "rgb_camera.color_profile": "640x480x30",
                 "depth_module.depth_profile": "640x480x30",
             }.items(),
