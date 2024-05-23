@@ -67,6 +67,10 @@ def generate_launch_description():
                 "mode": 1,
             }],
         ),
+        Node(
+            executable="cyberarm_node",
+            package="cyber_arm",
+        ),
         IncludeLaunchDescription(
             PathJoinSubstitution([FindPackageShare("cyber_arm"), "launch", "camera.launch.py"]),
             condition=IfCondition(camera),
