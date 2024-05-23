@@ -81,15 +81,20 @@ def restoreTerminalSettings(old_settings):
 x = 0.0
 y = 0.0
 z = 0.0
-t = math.pi / 2.
+t = 0.0
+initialized = False
 
 def update_ee(msg: PointStamped):
     global x
     global y
     global z
-    x = msg.point.x
-    y = msg.point.y
-    z = msg.point.z
+    global initialized
+
+    if not initialized:
+        x = msg.point.x
+        y = msg.point.y
+        z = msg.point.z
+        initialized = True
 
 
 def main():
@@ -98,9 +103,6 @@ def main():
     rclpy.init()
 
     node = rclpy.create_node('teleop_keyboard')
-
-    # parameters
-    frame_id = node.declare_parameter('frame_id', 'base_link').value
 
     pub = node.create_publisher(CyberarmTarget4D, 'ctrl/target4d', 10)
     sub = node.create_subscription(PointStamped, "viz/end_effector", update_ee, 10)
@@ -122,6 +124,9 @@ def main():
     try:
         print(x, y, z)
         while True:
+            if not initialized:
+                continue
+
             key = getKey(settings)
             if key in moveBindings.keys():
                 vx, vy, vz, vt = moveBindings[key]
