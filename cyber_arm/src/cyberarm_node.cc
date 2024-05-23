@@ -4,6 +4,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/node.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
+#include <std_msgs/msg/float64.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 
@@ -23,7 +24,7 @@
 #define L0 0.11729
 #define L1 0.129772
 #define L2 0.129772
-#define L3 0.141307
+#define L3 0.10095
 #define L {L0, L1, L2, L3}
 
 #define NUM_MOTORS 4
@@ -38,6 +39,7 @@ using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
 using geometry_msgs::msg::Point;
 using geometry_msgs::msg::PointStamped;
+using std_msgs::msg::Float64;
 using cyber_msgs::msg::CybergearState;
 using cyber_msgs::msg::CyberarmConfig;
 using cyber_msgs::msg::CyberarmTarget4D;
@@ -55,14 +57,15 @@ class CyberarmNode : public rclcpp::Node {
     for (int i = 0; i < NUM_MOTORS; ++i) {
       m_arm_[i]->SetZeroPosition();
       cb_state_pubs_[i] = create_publisher<CybergearState>("state/arm" + std::to_string(i), 10);
+      target_q_pubs_[i] = create_publisher<Float64>("viz/configuration" + std::to_string(i), 10);
     }
 
     rclcpp::sleep_for(100ms);
 
-    m_arm_[0]->ConfigurePositionMode();
-    m_arm_[1]->ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.006);
-    m_arm_[2]->ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.004);
-    m_arm_[3]->ConfigurePositionMode(2.0, 23.0, 30.0, 3.0, 0.004);
+    m_arm_[0]->ConfigurePositionMode(1.0, 23.0, 15.0, 3.0, 0.004);
+    m_arm_[1]->ConfigurePositionMode(2.0, 23.0, 15.0, 5.0, 0.006);
+    m_arm_[2]->ConfigurePositionMode(2.0, 23.0, 15.0, 3.0, 0.004);
+    m_arm_[3]->ConfigurePositionMode(2.0, 23.0, 15.0, 3.0, 0.004);
 
     js_pub_ = create_publisher<JointState>("joint_states", 10);
     viz_ee_pub_ = create_publisher<PointStamped>("viz/end_effector", 10);
@@ -87,6 +90,7 @@ class CyberarmNode : public rclcpp::Node {
   rclcpp::TimerBase::SharedPtr state_timer_;
   rclcpp::TimerBase::SharedPtr ctrl_timer_;
   rclcpp::Publisher<CybergearState>::SharedPtr cb_state_pubs_[NUM_MOTORS];
+  rclcpp::Publisher<Float64>::SharedPtr target_q_pubs_[NUM_MOTORS];
 
   std::unique_ptr<xiaomi::CyberGear> m_arm_[NUM_MOTORS];
   CybergearState s_arm_[NUM_MOTORS];
@@ -230,6 +234,12 @@ class CyberarmNode : public rclcpp::Node {
   void CtrlLoop() {
     for (int i = 0; i < NUM_MOTORS; ++i) {
       m_arm_[i]->SendPositionCommand(target_q_[i]);
+    }
+
+    Float64 msg{};
+    for (int i = 0; i < NUM_MOTORS; ++i) {
+      msg.data = target_q_[i];
+      target_q_pubs_[i]->publish(msg);
     }
   }
 };
