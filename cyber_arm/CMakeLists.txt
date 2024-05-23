@@ -65,7 +65,7 @@ install(DIRECTORY models launch rviz ml
         DESTINATION share/${PROJECT_NAME})
 
 # install CPP nodes
-install(TARGETS cyberarm_node
+install(TARGETS cybergear_node cyberarm_node
         DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

@@ -4,6 +4,7 @@
 #include <net/if.h>
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -122,6 +123,13 @@ class CyberGear {
    */
   cyber_msgs::msg::CybergearState GetState() const;
 
+  /**
+   * @brief register a callback to be triggered as soon as a new state is received
+   *
+   * @param callback callback function
+   */
+  void RegisterStateCallback(const std::function<void()>& callback);
+
  private:
   // CAN data structures
   const uint8_t can_id_;
@@ -134,6 +142,7 @@ class CyberGear {
   // Rx loop
   std::thread rx_loop_;
   std::atomic<bool> rx_should_exit_ = false;
+  std::function<void()> state_callback_;
 
   // motor state
   mutable std::mutex state_mtx_;

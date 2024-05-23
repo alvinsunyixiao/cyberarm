@@ -146,6 +146,10 @@ CybergearState CyberGear::GetState() const {
   return state_;
 }
 
+void CyberGear::RegisterStateCallback(const std::function<void()>& callback) {
+  state_callback_ = callback;
+}
+
 void CyberGear::Transmit(communication_type_t comm_type, uint16_t header_data) {
   can_tx_frame_.can_id = CAN_EFF_FLAG | (comm_type << 24) | (header_data << 8) | can_id_;
   if (write(sock_, &can_tx_frame_, sizeof(can_tx_frame_)) != sizeof(can_tx_frame_)) {
@@ -181,6 +185,10 @@ void CyberGear::RxLoop() {
         state_.temperature = (
           can_rx_frame_.data[6] << 8 | can_rx_frame_.data[7]) * TEMPERATURE_GAIN;
         error_code_ = (can_rx_frame_.can_id >> 16) & 0x1f;
+      }
+
+      if (state_callback_) {
+        state_callback_();
       }
     }
   }

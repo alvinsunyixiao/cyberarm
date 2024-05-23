@@ -12,10 +12,10 @@ find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-    "msg/CyberarmConfig.msg"
     "msg/CyberarmTarget4D.msg"
     "msg/CybergearState.msg"
     "msg/CybergearStateStamped.msg"
+    "msg/MotionCommand.msg"
     DEPENDENCIES std_msgs geometry_msgs
 )
 

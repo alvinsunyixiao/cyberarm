@@ -13,13 +13,14 @@
 #include "cyber_arm/cybergear.hpp"
 #include "cyber_arm/sym/forward3d.h"
 #include "cyber_arm/sym/forward4d.h"
-#include "cyber_msgs/msg/cyberarm_config.hpp"
+#include "cyber_msgs/msg/cybergear_state.hpp"
+#include "cyber_msgs/msg/cybergear_state_stamped.hpp"
 #include "cyber_msgs/msg/cyberarm_target4_d.hpp"
 
-#define ARM0_CAN_ID 127
-#define ARM1_CAN_ID 126
-#define ARM2_CAN_ID 125
-#define ARM3_CAN_ID 124
+// #define ARM0_CAN_ID 127
+// #define ARM1_CAN_ID 126
+// #define ARM2_CAN_ID 125
+// #define ARM3_CAN_ID 124
 
 #define L0 0.11729
 #define L1 0.129772
@@ -30,10 +31,10 @@
 #define NUM_MOTORS 4
 #define NUM_LM_ITERS  20
 
-#define ARM0_LIMIT M_PI
-#define ARM1_LIMIT (M_PI / 2.)
-#define ARM2_LIMIT (M_PI / 2.)
-#define ARM3_LIMIT (M_PI / 2.)
+// #define ARM0_LIMIT M_PI
+// #define ARM1_LIMIT (M_PI / 2.)
+// #define ARM2_LIMIT (M_PI / 2.)
+// #define ARM3_LIMIT (M_PI / 2.)
 
 using namespace std::chrono_literals;
 using sensor_msgs::msg::JointState;
@@ -41,31 +42,14 @@ using geometry_msgs::msg::Point;
 using geometry_msgs::msg::PointStamped;
 using std_msgs::msg::Float64;
 using cyber_msgs::msg::CybergearState;
-using cyber_msgs::msg::CyberarmConfig;
+using cyber_msgs::msg::CybergearStateStamped;
 using cyber_msgs::msg::CyberarmTarget4D;
 
 class CyberarmNode : public rclcpp::Node {
  public:
-  CyberarmNode()
-      : rclcpp::Node("cyberarm_node") {
-
-    m_arm_[0] = std::make_unique<xiaomi::CyberGear>(ARM0_CAN_ID, xiaomi::POSITION_MODE);
-    m_arm_[1] = std::make_unique<xiaomi::CyberGear>(ARM1_CAN_ID, xiaomi::POSITION_MODE);
-    m_arm_[2] = std::make_unique<xiaomi::CyberGear>(ARM2_CAN_ID, xiaomi::POSITION_MODE);
-    m_arm_[3] = std::make_unique<xiaomi::CyberGear>(ARM3_CAN_ID, xiaomi::POSITION_MODE);
-
-    for (int i = 0; i < NUM_MOTORS; ++i) {
-      m_arm_[i]->SetZeroPosition();
-      cb_state_pubs_[i] = create_publisher<CybergearState>("state/arm" + std::to_string(i), 10);
-      target_q_pubs_[i] = create_publisher<Float64>("viz/configuration" + std::to_string(i), 10);
-    }
+  CyberarmNode() : rclcpp::Node("cyberarm_node") {
 
     rclcpp::sleep_for(100ms);
-
-    m_arm_[0]->ConfigurePositionMode(1.0, 23.0, 15.0, 3.0, 0.004);
-    m_arm_[1]->ConfigurePositionMode(2.0, 23.0, 15.0, 5.0, 0.006);
-    m_arm_[2]->ConfigurePositionMode(2.0, 23.0, 15.0, 3.0, 0.004);
-    m_arm_[3]->ConfigurePositionMode(2.0, 23.0, 15.0, 3.0, 0.004);
 
     js_pub_ = create_publisher<JointState>("joint_states", 10);
     viz_ee_pub_ = create_publisher<PointStamped>("viz/end_effector", 10);
@@ -74,10 +58,19 @@ class CyberarmNode : public rclcpp::Node {
       [this](Point::SharedPtr msg) { Target3DCallback(msg); });
     target4d_sub_ = create_subscription<CyberarmTarget4D>("ctrl/target4d", 10,
       [this](CyberarmTarget4D::SharedPtr msg) { Target4DCallback(msg); });
-    config_sub_ = create_subscription<CyberarmConfig>("ctrl/configuration", 10,
-      [this](CyberarmConfig::SharedPtr msg) { ConfigurationCallback(msg); });
-    state_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::StateLoop, this));
-    ctrl_timer_ = create_wall_timer(5ms, std::bind(&CyberarmNode::CtrlLoop, this));
+
+    for (size_t i = 0; i < NUM_MOTORS; ++i) {
+      cb_pos_pubs_[i] = create_publisher<Float64>(
+        "cybergear" + std::to_string(i) + "/cmd_position",
+        10
+      );
+      cb_state_subs_[i] = create_subscription<CybergearStateStamped>(
+        "cybergear" + std::to_string(i) + "/state",
+        10,
+        [this, i](CybergearStateStamped::SharedPtr msg) {
+          CybergearStateCallback(msg, i);
+        });
+    }
   }
 
  private:
@@ -86,16 +79,10 @@ class CyberarmNode : public rclcpp::Node {
   rclcpp::Publisher<PointStamped>::SharedPtr viz_target_pub_;
   rclcpp::Subscription<Point>::SharedPtr target3d_sub_;
   rclcpp::Subscription<CyberarmTarget4D>::SharedPtr target4d_sub_;
-  rclcpp::Subscription<CyberarmConfig>::SharedPtr config_sub_;
-  rclcpp::TimerBase::SharedPtr state_timer_;
-  rclcpp::TimerBase::SharedPtr ctrl_timer_;
-  rclcpp::Publisher<CybergearState>::SharedPtr cb_state_pubs_[NUM_MOTORS];
-  rclcpp::Publisher<Float64>::SharedPtr target_q_pubs_[NUM_MOTORS];
+  rclcpp::Subscription<CybergearStateStamped>::SharedPtr cb_state_subs_[NUM_MOTORS];
+  rclcpp::Publisher<Float64>::SharedPtr cb_pos_pubs_[NUM_MOTORS];
 
-  std::unique_ptr<xiaomi::CyberGear> m_arm_[NUM_MOTORS];
   CybergearState s_arm_[NUM_MOTORS];
-
-  Eigen::Vector4d target_q_ = Eigen::Vector4d::Zero();
 
   void PublishPoint(rclcpp::Publisher<PointStamped>::SharedPtr pub,
                     const Point& point,
@@ -131,16 +118,16 @@ class CyberarmNode : public rclcpp::Node {
     for (int i = 0; i < NUM_LM_ITERS; ++i) {
       symik::Forward3D(q, lambda, target3d, L, &f, &e, &J, &A);
       q -= A.inverse() * J.transpose() * (f - target3d);
-      q[0] = std::clamp(q[0], -ARM0_LIMIT, ARM0_LIMIT);
-      q[1] = std::clamp(q[1], -ARM1_LIMIT, ARM1_LIMIT);
-      q[2] = std::clamp(q[2], -ARM2_LIMIT, ARM2_LIMIT);
-      q[3] = std::clamp(q[3], -ARM3_LIMIT, ARM3_LIMIT);
     }
 
     RCLCPP_INFO(get_logger(), "LM solved with error: %lf, final configuration: [%lf, %lf, %lf, %lf]",
         e, q[0], q[1], q[2], q[3]);
 
-    target_q_ = q;
+    for (size_t i = 0; i < NUM_MOTORS; ++i) {
+      Float64 msg{};
+      msg.data = q[i];
+      cb_pos_pubs_[i]->publish(msg);
+    }
 
     PublishPoint(viz_target_pub_, *msg);
   }
@@ -171,36 +158,29 @@ class CyberarmNode : public rclcpp::Node {
     for (int i = 0; i < NUM_LM_ITERS; ++i) {
       symik::Forward4D(q, lambda, target4d, L, &f, &e, &J, &A);
       q -= A.inverse() * J.transpose() * (f - target4d);
-      q[0] = std::clamp(q[0], -ARM0_LIMIT, ARM0_LIMIT);
-      q[1] = std::clamp(q[1], -ARM1_LIMIT, ARM1_LIMIT);
-      q[2] = std::clamp(q[2], -ARM2_LIMIT, ARM2_LIMIT);
-      q[3] = std::clamp(q[3], -ARM3_LIMIT, ARM3_LIMIT);
     }
 
     RCLCPP_INFO(get_logger(), "LM solved with error: %lf, final configuration: [%lf, %lf, %lf, %lf]",
         e, q[0], q[1], q[2], q[3]);
 
-    target_q_ = q;
+    for (size_t i = 0; i < NUM_MOTORS; ++i) {
+      Float64 msg{};
+      msg.data = q[i];
+      cb_pos_pubs_[i]->publish(msg);
+    }
 
     PublishPoint(viz_target_pub_, msg->point);
   }
 
-  void ConfigurationCallback(CyberarmConfig::SharedPtr msg) {
-    target_q_[0] = std::clamp(msg->q[0], -ARM0_LIMIT, ARM0_LIMIT);
-    target_q_[1] = std::clamp(msg->q[1], -ARM1_LIMIT, ARM1_LIMIT);
-    target_q_[2] = std::clamp(msg->q[2], -ARM2_LIMIT, ARM2_LIMIT);
-    target_q_[3] = std::clamp(msg->q[3], -ARM3_LIMIT, ARM3_LIMIT);
+  void CybergearStateCallback(CybergearStateStamped::SharedPtr msg, size_t idx) {
+    s_arm_[idx] = msg->state;
+    PublishState(msg->header.stamp);
   }
 
-  void StateLoop() {
-    // obtain latest states
-    for (int i = 0; i < NUM_MOTORS; ++i) {
-      s_arm_[i] = m_arm_[i]->GetState();
-    }
-
+  void PublishState(const rclcpp::Time& timestamp) {
     // publish joint state
     JointState msg{};
-    msg.header.stamp = this->get_clock()->now();
+    msg.header.stamp = timestamp;
 
     msg.position.resize(4);
     msg.position[0] = s_arm_[0].position;
@@ -224,23 +204,8 @@ class CyberarmNode : public rclcpp::Node {
     Eigen::Vector3d f;
     symik::Forward3D<double>(q, lambda, target3d, L, &f, nullptr, nullptr, nullptr);
 
-    for (int i = 0; i < NUM_MOTORS; ++i) {
-      cb_state_pubs_[i]->publish(s_arm_[i]);
-    }
     js_pub_->publish(msg);
     PublishPoint(viz_ee_pub_, tf2::toMsg(f));
-  }
-
-  void CtrlLoop() {
-    for (int i = 0; i < NUM_MOTORS; ++i) {
-      m_arm_[i]->SendPositionCommand(target_q_[i]);
-    }
-
-    Float64 msg{};
-    for (int i = 0; i < NUM_MOTORS; ++i) {
-      msg.data = target_q_[i];
-      target_q_pubs_[i]->publish(msg);
-    }
   }
 };
 
