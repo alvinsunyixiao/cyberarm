@@ -40,6 +40,10 @@ add_executable(cyberarm_node src/cyberarm_node.cc)
 target_link_libraries(cyberarm_node cybergear_lib)
 ament_target_dependencies(cyberarm_node rclcpp sensor_msgs geometry_msgs Eigen3 tf2_eigen)
 
+add_executable(cybergear_node src/cybergear_node.cc)
+target_link_libraries(cybergear_node cybergear_lib)
+ament_target_dependencies(cybergear_node rclcpp)
+
 # install CPP libraries
 install(
   TARGETS cybergear_lib
