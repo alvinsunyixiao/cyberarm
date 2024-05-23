@@ -69,7 +69,11 @@ constexpr float TEMPERATURE_GAIN = 0.1;
 
 class CyberGear {
  public:
-  CyberGear(uint8_t can_id, control_mode_t mode = MOTION_MODE, const std::string& can_if = "can0");
+  CyberGear(uint8_t can_id,
+            control_mode_t mode = MOTION_MODE,
+            const std::string& can_if = "can0",
+            bool set_zero_position = true,
+            bool start = false);
   ~CyberGear();
 
   template <typename T>

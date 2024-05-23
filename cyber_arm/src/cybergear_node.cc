@@ -129,7 +129,6 @@ class CybergearNode : public rclcpp::Node {
 
   void CybergearInit() {
     cybergear_ = std::make_unique<xiaomi::CyberGear>(CanID(), Mode());
-    cybergear_->SetZeroPosition();
 
     if (Mode() == xiaomi::POSITION_MODE) {
       cybergear_->ConfigurePositionMode(MaxVelocity(),
@@ -140,6 +139,8 @@ class CybergearNode : public rclcpp::Node {
     }
 
     cybergear_->RegisterStateCallback(std::bind(&CybergearNode::PublishState, this));
+
+    cybergear_->Start();
   }
 
   void PublishState() {

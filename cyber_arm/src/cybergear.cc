@@ -31,7 +31,11 @@ static float uint16_to_float(uint16_t x, float x_min, float x_max) {
 }
 
 
-CyberGear::CyberGear(uint8_t can_id, control_mode_t mode, const std::string& can_if) : can_id_(can_id), ctrl_mode_(mode) {
+CyberGear::CyberGear(uint8_t can_id,
+                     control_mode_t mode,
+                     const std::string& can_if,
+                     bool set_zero_position,
+                     bool start) : can_id_(can_id), ctrl_mode_(mode) {
   // socket initialization
   sock_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
   strcpy(can_ifr_.ifr_name, can_if.c_str());
@@ -68,7 +72,14 @@ CyberGear::CyberGear(uint8_t can_id, control_mode_t mode, const std::string& can
   rx_loop_ = std::thread(std::bind(&CyberGear::RxLoop, this));
 
   SetRunMode(mode);
-  Start();
+
+  if (set_zero_position) {
+    SetZeroPosition();
+  }
+
+  if (start) {
+    Start();
+  }
 }
 
 CyberGear::~CyberGear() {
