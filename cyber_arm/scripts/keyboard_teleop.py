@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
+import math
 import sys
 import threading
 
 import rclpy
 
 from cyber_msgs.msg import CyberarmTarget4D
+from geometry_msgs.msg import PointStamped
 
 if sys.platform == 'win32':
     import msvcrt
@@ -76,6 +78,18 @@ def restoreTerminalSettings(old_settings):
         return
     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 
+x = 0.0
+y = 0.0
+z = 0.0
+t = math.pi / 2.
+
+def update_ee(msg: PointStamped):
+    global x
+    global y
+    global z
+    x = msg.point.x
+    y = msg.point.y
+    z = msg.point.z
 
 
 def main():
@@ -89,23 +103,24 @@ def main():
     frame_id = node.declare_parameter('frame_id', 'base_link').value
 
     pub = node.create_publisher(CyberarmTarget4D, 'ctrl/target4d', 10)
+    sub = node.create_subscription(PointStamped, "viz/end_effector", update_ee, 10)
 
     spinner = threading.Thread(target=rclpy.spin, args=(node,))
     spinner.start()
 
-    x = 0.0
-    y = 0.0
-    z = 0.5
-    t = 0.0
+    node.get_clock().sleep_for(rclpy.duration.Duration(seconds=1.))
+
     vx = 0.0
     vy = 0.0
     vz = 0.0
     vt = 0.0
 
+    global t
+
     msg = CyberarmTarget4D()
 
     try:
-        print(msg)
+        print(x, y, z)
         while True:
             key = getKey(settings)
             if key in moveBindings.keys():
@@ -114,17 +129,15 @@ def main():
                 vx = 0.0
                 vy = 0.0
                 vz = 0.0
+                vt = 0.0
                 if (key == '\x03'):
                     break
 
-            x += vx * 0.005
-            y += vy * 0.005
-            z += vz * 0.005
-            t += vt * 0.005
+            t += vt * 0.01
 
-            msg.point.x = x
-            msg.point.y = y
-            msg.point.z = z
+            msg.point.x = x + vx * 0.005
+            msg.point.y = y + vy * 0.005
+            msg.point.z = z + vz * 0.005
             msg.tilt = t
 
             pub.publish(msg)
