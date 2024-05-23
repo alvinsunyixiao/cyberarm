@@ -83,6 +83,8 @@ CyberGear::CyberGear(uint8_t can_id,
 }
 
 CyberGear::~CyberGear() {
+  state_callback_ = nullptr;
+
   Stop();
 
   rx_should_exit_.store(true);
